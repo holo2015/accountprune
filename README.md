@@ -34,3 +34,5 @@ Usage: /usr/local/bin/accountprune [option...] value
 
    -s, --system		Displays environment variables and status
 </pre>
+
+The current version uses <b>Outset</b> to handle the login time stamps for users and shedules automatic pruning for 2:00 am daily.
