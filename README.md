@@ -16,21 +16,21 @@ Usage: /usr/local/bin/accountprune [option...] value
    -c, --check		Check current time stamps for all users on the system
 
    -u, --user		Check status for specific user
-				ex: ./accountprune -u jdoe
+				ex: /usr/local/bin/accountprune -u jdoe
 
    -k, --pruneUser	Prune account for specific username
-				ex: ./accountprune -k jdoe
+				ex: /usr/local/bin/accountprune -k jdoe
 
    -P, --pruneAll	Prune ALL accounts that are over the threshold
 
    -t, --threshold	Set new threshold value.  Input value is the number
 			of days to wait after last login before account is
 			purged.
-				ex: ./accountprune -t 5
+				ex: /usr/local/bin/accountprune -t 5
 				sets threshold value to 5 days
 
    -i, --immune		Change immunity from purge for specific username
-				ex: ./accountprune -i jdoe
+				ex: /usr/local/bin/accountprune -i jdoe
 
    -s, --system		Displays environment variables and status
 </pre>
