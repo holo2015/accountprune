@@ -5,8 +5,11 @@ if [[ $EUID -ne 0 ]]; then
 fi
 # ================================================
 
-if defaults read /Library/MICA/edu.mica.deploy DaysBeforeAccountPurge >/dev/null 2>&1; then
-	timeThreshold=$(defaults read /Library/MICA/edu.mica.deploy DaysBeforeAccountPurge);
+configPlist="/Library/MICA/edu.mica.deploy.plist"
+configPlistThresholdKey="DaysBeforeAccountPurge"
+
+if defaults read "${configPlist}" >/dev/null 2>&1; then
+	timeThreshold=$(defaults read "${configPlist}" "${configPlistThresholdKey}");
 else
         timeThreshold=0
 fi
@@ -29,7 +32,7 @@ originalDirectoryNode=""
 
 displaySystem () {
 	echo "=============================="
-	echo "Displaying environemnt settings"
+	echo "Displaying environment settings"
 	echo "=============================="
 	echo "Threshold: "
 	echo "		$timeThreshold days" 
@@ -246,7 +249,7 @@ askToPruneUser () {
 	done
 }
 pruneUser () {
-	pruneline="------------------------------------"
+#	pruneline="------------------------------------"
 	if [[ ! $userToProcess = $currentLoggedInUser ]]; then
 		if [[ ! -f /Users/${userToProcess}/.doNotDelete ]]; then
 			if [[ -d /Users/${userToProcess}/ ]]; then
@@ -300,7 +303,7 @@ setThreshold () {
 		fi
 		
 	fi
-	defaults write /Library/MICA/edu.mica.deploy DaysBeforeAccountPurge -integer $newThreshold
+	defaults write "${configPlist}" "${configPlistThresholdKey}" -integer $newThreshold
 	
 }
 
