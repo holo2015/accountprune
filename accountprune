@@ -1,0 +1,391 @@
+#!/bin/bash
+if [[ $EUID -ne 0 ]]; then
+   echo "This command requires administrative privileges"
+   exit 1
+fi
+# ================================================
+
+if defaults read /Library/MICA/edu.mica.deploy DaysBeforeAccountPurge >/dev/null 2>&1; then
+	timeThreshold=$(defaults read /Library/MICA/edu.mica.deploy DaysBeforeAccountPurge);
+else
+        timeThreshold=0
+fi
+
+currentTime=$(date +%s);
+currentLoggedInUser=`python -c 'from SystemConfiguration import SCDynamicStoreCopyConsoleUser; import sys; username = (SCDynamicStoreCopyConsoleUser(None, None, None) or [None])[0]; username = [username,""][username in [u"loginwindow", None, u""]]; sys.stdout.write(username + "\n");'`
+
+outsetLoc="/usr/local/outset/outset"
+timestampLoginItemLoc="/usr/local/outset/login-every/loginTimeStamp.sh"
+
+userToProcess=""
+timeDiff=""
+daysSinceLogin=""
+daysOverThreshold=""
+doNotDelete=NO;
+originalDirectoryNode=""
+
+# ================================================
+
+
+displaySystem () {
+	echo "=============================="
+	echo "Displaying environemnt settings"
+	echo "=============================="
+	echo "Threshold: "
+	echo "		$timeThreshold days" 
+	if [ $timeThreshold = 0 ]; then
+		echo "		(System disabled)"
+	fi
+	echo "System time: "
+	echo "		$currentTime"
+	echo "		(`date`)"
+	echo "Outset:"
+	if [ -f ${outsetLoc} ]; then
+        echo "		Installed"
+		echo "		(${outsetLoc})"
+    else
+		echo -e "		\033[7mNot Found\033[0m"
+        fi
+	echo "Time stamp login script:"
+	if [ -f /usr/local/outset/login-every/loginTimeStamp.sh ]; then
+		echo "		Installed"
+		echo "		(${timestampLoginItemLoc})"
+	else
+                echo -e "		\033[7mNot Found\033[0m"
+	fi
+	echo "Current Logged in User: "
+	echo "		$currentLoggedInUser"
+	
+	userToProcess=$currentLoggedInUser
+	processUser
+
+	if [[ ! -z ${loginTime// } ]]; then
+		echo "		Time stamp data found (~/.loginTimeStamp)"
+		echo "		$loginTime (Δ $timeDiff)"
+		echo "		$daysSinceLogin day(s) since last login"
+	else
+		echo -e "		\033[7mTime stamp missing\033[0m - will be set on next sweep if not set by next login"
+	fi
+	if [[ $doNotDelete = "YES" ]]; then
+		echo "		Delete override found (~/.doNotDelete)"
+		echo "		User exempt from purging"
+	else
+		echo "		User will not be purged (currently logged in)"
+	fi
+        echo "=============================="
+}
+
+pruneAccounts () {
+	if [[ ! $timeThreshold -eq 0 ]]; then
+		echo "=============================="
+		echo "Pruning Accounts with a threshold of $timeThreshold day(s)"
+		echo `date`
+		echo "=============================="
+
+		line="                    "
+
+		totalUsers=0
+		prunedUsers=0
+		for USER_HOME in /Users/*
+		do
+			USER_UID=`basename "${USER_HOME}"`
+			if [[ ! "${USER_UID}" = "Shared" && ! "${USER_UID}" = "Guest" && ! "${USER_UID}" = "admin" ]]; then
+				userToProcess=${USER_UID}
+
+				processUser
+						
+				if [[ $daysSinceLogin -ge $timeThreshold ]]; then
+					if [ $doNotDelete = "NO" ]; then
+						echo -e "${line:${#USER_UID}} $USER_UID - $daysSinceLogin day(s) since last login -  $daysOverThreshold day(s) over"
+						pruneUser
+						let prunedUsers+=1
+					else
+						echo -e "${line:${#USER_UID}} $USER_UID - $daysSinceLogin day(s) since last login - Exempt from deletion"
+					fi
+				else
+					if [[ $daysSinceLogin = "" ]]; then
+						echo -e "${line:${#USER_UID}} $USER_UID - No time stamp set, setting to now"
+						echo $currentTime > /Users/${USER_UID}/.loginTimeStamp
+					fi
+				fi 
+			fi
+			let totalUsers+=1
+		done
+		echo "Total $totalUsers processed, $prunedUsers removed"
+	fi
+
+}
+
+checkAccounts () {
+	if [[ ! $timeThreshold -eq 0 ]]; then
+	echo "=============================="
+	echo "Checking All Accounts"
+	echo "=============================="
+
+#	line="...................."
+	line="                    "
+
+	for USER_HOME in /Users/*
+	do
+		USER_UID=`basename "${USER_HOME}"`
+		if [[ ! "${USER_UID}" = "Shared" && ! "${USER_UID}" = "Guest" && ! "${USER_UID}" = "admin" ]]; then
+			userToProcess=${USER_UID}
+			processUser
+							
+			if [ $doNotDelete = "YES" ]; then
+					echo -e "${line:${#USER_UID}} $USER_UID - \033[7mExempt from deletion\033[0m"
+			else
+				if [[ $daysSinceLogin -ge $timeThreshold ]]; then
+					echo -e "${line:${#USER_UID}} $USER_UID - \033[7m$daysSinceLogin days since last login -  $daysOverThreshold day(s) over threshold\033[0m"
+				
+				else
+					if [[ $daysSinceLogin = "" ]]; then
+						echo "${line:${#USER_UID}} $USER_UID - No time stamp set"
+					else
+						if [[ $daysOverThreshold < 0 ]]; then daysOverThreshold=$(($daysOverThreshold * -1)); fi
+						echo "${line:${#USER_UID}} $USER_UID - Last login $daysSinceLogin days ago, $daysOverThreshold days remaining"
+						
+					fi 
+				fi
+			fi
+		fi
+	done
+	else
+		echo "Account prune system is disabled"
+	fi
+}
+
+checkUser () {
+	echo "=============================="
+	echo "Checking user $userToProcess"
+	echo "=============================="
+	id ${userToProcess} > /dev/null 2>&1
+	if [[ $? -eq 0 ]]; then
+			
+		processUser
+			echo "Username can be found"
+			
+		if [[ ! -z ${originalDirectoryNode// } ]]; then
+			echo "- Came from $originalDirectoryNode"
+		fi
+		if [[ -d /Users/${userToProcess}/ ]]; then
+			echo "- Has local home folder"
+			diskUsage=`du -sh /Users/${userToProcess} | cut -f 1 | tr -d ' '`
+			echo "- Home folder using $diskUsage on disk"
+			
+			if [[ ! -z ${loginTime// } ]]; then
+				echo "Time stamp data found"
+	
+				echo "- $loginTime (Δ $timeDiff)"
+				echo "- $daysSinceLogin days sine last login"
+			else
+				echo -e "\033[7mTime stamp missing\033[0m - will be set on next sweep if not set by next login"
+			fi
+		else
+			echo -e "\033[7m- No local home folder\033[0m (Never logged in?)"
+		fi	
+			
+		if [[ $doNotDelete = "YES" ]]; then
+			echo "Purge override found"
+			echo -e "- \033[7mUser exempt from purging\033[0m"
+		fi
+		echo "=============================="
+
+		if [[ $daysSinceLogin > $timeThreshold && $doNotDelete != "YES" ]]; then
+			echo -e "\033[7m$daysOverThreshold days over threshold - '${userToProcess}' will be deleted on next cycle\033[0m"
+		else
+			echo "User will not be removed on next cycle"
+		fi 
+	else
+		echo "User does not exist in directory"
+	fi
+	echo "=============================="
+}
+
+processUser () {
+	timeDiff=""
+	daysSinceLogin=""
+	daysOverThreshold=""
+	doNotDelete=NO;
+	originalDirectoryNode=""
+
+		if [ -f /Users/${userToProcess}/.loginTimeStamp ]; then
+			loginTime=$(cat /Users/${userToProcess}/.loginTimeStamp)
+			if [[ $loginTime = "" ]]; then
+				rm /Users/${userToProcess}/.loginTimeStamp
+			else
+				timeDiff=$(($currentTime - $loginTime))
+				daysSinceLogin=$(($timeDiff / 86400))
+			fi
+#			id ${userToProcess} > /dev/null 2>&1
+#			if [[ $? -eq 0 ]]; then
+#				originalDirectoryNode=`dscl . -read /Users/${userToProcess} OriginalNodeName | tr -d '\n' | sed 's/OriginalNodeName: //g'`
+#				if [[ $originalDirectoryNode != "/Active Directory/MICA/mica.edu" && $originalDirectoryNode != "/LDAPv3/odin.mica.edu" ]]; then
+#					originalDirectoryNode=""
+#				fi
+#			fi
+		fi
+		if [ -f /Users/${userToProcess}/.doNotDelete ]; then
+			doNotDelete=YES;
+		fi
+		daysOverThreshold=$(($daysSinceLogin - $timeThreshold))
+}
+askToPruneUser () {
+	while true; do
+	read -p "Are you sure you want to prune the account '$userToProcess'? (y/N) " yn
+	case $yn in
+		[Yy]* )
+			pruneUser
+			break
+			;;
+		[Nn]* )
+			break
+			;;
+		*) break;;
+		esac
+	done
+}
+pruneUser () {
+	pruneline="------------------------------------"
+	if [[ ! $userToProcess = $currentLoggedInUser ]]; then
+		if [[ ! -f /Users/${userToProcess}/.doNotDelete ]]; then
+			if [[ -d /Users/${userToProcess}/ ]]; then
+				echo "                        >> Removing Home Folder"
+				diskUsage=`du -sh /Users/${userToProcess} | cut -f 1 | tr -d ' '`
+				rm -rf 	/Users/"${userToProcess}"  >/dev/null 2>&1
+				echo "                        >>>> $diskUsage removed"
+			fi
+			if [[ -d "/Library/Managed Preferences/${userToProcess}" ]]; then
+				echo "                        >> Removing Managed Settings Cache"
+				rm -rf 	"/Library/Managed Preferences/${userToProcess}"
+			fi
+			if dscl . -read /Users/$userToProcess >/dev/null 2>&1; then
+				echo "                        >> Removing Local Account"
+				sysadminctl -deleteUser "${USER_UID}" >/dev/null 2>&1
+			fi
+		else
+			echo "User exempt from deletion"
+		fi
+	else
+		echo "(User currently logged in)"
+	fi
+}
+protectUser () {
+	if [[ -d /Users/${userToProcess}/ ]]; then
+		if [[ -f /Users/${userToProcess}/.doNotDelete ]]; then
+			rm /Users/${userToProcess}/.doNotDelete
+			echo -e "User '${userToProcess}' \033[1mis no longer\033[0m protected from account pruning"
+		else
+			touch /Users/${userToProcess}/.doNotDelete
+			echo -e "User '${userToProcess}' \033[1mis now\033[0m protected from account pruning"
+		fi
+	else
+		echo "Unknown user"
+	fi
+}
+setThreshold () {
+	re='^[0-9]+$'
+	if ! [[ $newThreshold =~ $re ]] ; then
+		echo "Error setting account pruning threshold: '$newThreshold' is not a valid number" >&2; exit 1
+	fi
+	if [[ $newThreshold == 0 ]];then
+		echo "Threshold set to 0, Account pruning is disabled"
+	else
+		echo "Set account pruning threshold to $newThreshold days"
+		
+		if [[ ! $timeThreshold == $newThreshold ]]; then
+			echo -e "\033[7mThreshold has changed, accounts will now be affected as follows\033[0m"
+			timeThreshold=${newThreshold}
+			checkAccounts
+		fi
+		
+	fi
+	defaults write /Library/MICA/edu.mica.deploy DaysBeforeAccountPurge -integer $newThreshold
+	
+}
+
+display_help() {
+	echo "Account pruning system."
+	echo "  This system is designed to removed accounts from the system that have not been logged into recently. Pruning is a scheduled process, and does not need to be triggered manually, however there are options for interacting with the system listed below."
+	echo "Usage: $0 [option...] value" >&2
+	echo
+	echo "   -c, --check		Check current time stamps for all users on the system"
+	echo
+	echo "   -u, --user		Check status for specific user"
+	echo "				ex: $0 -u micauser"
+	echo 
+	echo "   -k, --pruneUser	Prune account for specific username"
+	echo "				ex: $0 -k micauser"
+	echo
+	echo "   -P, --pruneAll	Prune ALL accounts that are over the threshold"
+	echo
+	echo "   -t, --threshold	Set new threshold value.  Input value is the number"
+	echo "			of days to wait after last login before account is"
+	echo "			purged."
+	echo "				ex: $0 -t 5"
+	echo "				sets threshold value to 5 days"
+	echo
+	echo "   -i, --immune		Change immunity from purge for specific username"
+	echo "				ex: $0 -i micauser"
+	echo
+	echo "   -s, --system		Displays environment variables and status"
+	echo
+	exit 1
+}
+
+
+while :
+do
+	case "$1" in
+		-h | --help)
+			display_help  # Call your function
+			exit 0
+			;;
+        -c | --check)
+                checkAccounts
+                break
+                ;;
+		-u | --user)
+			userToProcess="$2"
+			checkUser
+			break
+			;;
+		-k | --pruneUser)
+			userToProcess="$2"
+			askToPruneUser
+			break
+			;;
+		-P | --pruneAll)
+			pruneAccounts
+			break
+			;;
+        -t | --threshold)
+			newThreshold="$2"
+			setThreshold
+			break
+            ;;
+		-i | --immune)
+			userToProcess="$2"
+			protectUser
+			break
+			;;
+		-s | --system)
+			displaySystem
+			break
+			;;
+		--) # End of all options
+			shift
+			break
+			;;
+		-*)
+			echo "Error: Unknown option: $1" >&2
+			display_help
+			exit 1 
+			;;
+		*)  # No more options
+			display_help
+			exit 0
+			;;
+	esac
+done
+
