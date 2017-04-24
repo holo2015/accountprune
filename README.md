@@ -10,8 +10,8 @@ Scheduling is handled via a LaunchDaemon in production, but the command can be c
 
 Due to the nature of needing to read inside other accounts (and potentially remove them) root access is required. (sudo works just fine from a privledged account)
 
-
-Usage: ./accountprune [option...] value
+<pre>
+Usage: /usr/local/bin/accountprune [option...] value
 
    -c, --check		Check current time stamps for all users on the system
 
@@ -33,3 +33,4 @@ Usage: ./accountprune [option...] value
 				ex: ./accountprune -i jdoe
 
    -s, --system		Displays environment variables and status
+</pre>
