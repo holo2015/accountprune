@@ -1,15 +1,25 @@
 # accountprune
-Account pruning system.
-This system is designed to removed accounts from the system that have not been logged into recently. Pruning is a scheduled process, and does not need to be triggered manually, however there are options for interacting with the system listed below.
+Automatic account pruning system of OS X/macOS
+
+
+This system is designed to removed accounts from the system that have not been logged into recently.
+
+It relies on a timestamp being set (.loginTimeStamp) in a user's home folder via the companion script (loginTimeStamp.sh).  If the timestamp is not found when the process runs in purge mode, it is set for a user at that point (making the time stamp helper not 100% nessesary, but it makes it more accurate)
+
+Scheduling is handled via a LaunchDaemon in production, but the command can be called at any point manually via command line.
+
+Due to the nature of needing to read inside other accounts (and potentially remove them) root access is required. (sudo works just fine from a privledged account)
+
+
 Usage: ./accountprune [option...] value
 
    -c, --check		Check current time stamps for all users on the system
 
    -u, --user		Check status for specific user
-				ex: ./accountprune -u micauser
+				ex: ./accountprune -u jdoe
 
    -k, --pruneUser	Prune account for specific username
-				ex: ./accountprune -k micauser
+				ex: ./accountprune -k jdoe
 
    -P, --pruneAll	Prune ALL accounts that are over the threshold
 
@@ -20,6 +30,6 @@ Usage: ./accountprune [option...] value
 				sets threshold value to 5 days
 
    -i, --immune		Change immunity from purge for specific username
-				ex: ./accountprune -i micauser
+				ex: ./accountprune -i jdoe
 
    -s, --system		Displays environment variables and status
