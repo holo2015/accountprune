@@ -111,8 +111,8 @@ pruneAccounts () {
 						echo $currentTime > /Users/${USER_UID}/.loginTimeStamp
 					fi
 				fi 
-			fi
 			let totalUsers+=1
+			fi
 		done
 		echo "Total $totalUsers processed, $prunedUsers removed"
 	fi
