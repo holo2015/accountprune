@@ -7,11 +7,10 @@ fi
 
 configPlist="/Library/MICA/edu.mica.deploy.plist"
 configPlistThresholdKey="DaysBeforeAccountPurge"
+timeThreshold=0
 
 if defaults read "${configPlist}" >/dev/null 2>&1; then
-	timeThreshold=$(defaults read "${configPlist}" "${configPlistThresholdKey}");
-else
-        timeThreshold=0
+	timeThreshold=$(defaults read "${configPlist}" "${configPlistThresholdKey}"); 
 fi
 
 currentTime=$(date +%s);
