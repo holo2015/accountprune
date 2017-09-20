@@ -26,6 +26,7 @@ daysSinceLogin=""
 daysOverThreshold=""
 doNotDelete=NO;
 originalDirectoryNode=""
+usageCheck="No"
 
 # ================================================
 
@@ -50,7 +51,7 @@ displaySystem () {
 		echo -e "		\033[7mNot Found\033[0m"
         fi
 	echo "Time stamp login script:"
-	if [ -f /usr/local/outset/login-every/loginTimeStamp.sh ]; then
+	if [ -f ${timestampLoginItemLoc} ]; then
 		echo "		Installed"
 		echo "		(${timestampLoginItemLoc})"
 	else
@@ -150,6 +151,12 @@ checkAccounts () {
 						
 					fi 
 				fi
+			if [ $usageCheck = "Yes" ]; then
+				diskUsage=`du -sh /Users/${userToProcess} | cut -f 1 | tr -d ' '`
+				echo "                        - $diskUsage used in home folder"
+
+			fi
+
 			fi
 		fi
 	done
@@ -180,7 +187,7 @@ checkUser () {
 				echo "Time stamp data found"
 	
 				echo "- $loginTime (Δ $timeDiff)"
-				echo "- $daysSinceLogin days sine last login"
+				echo "- $daysSinceLogin days since last login"
 			else
 				echo -e "\033[7mTime stamp missing\033[0m - will be set on next sweep if not set by next login"
 			fi
@@ -313,6 +320,7 @@ display_help() {
 	echo "Usage: $0 [option...] value" >&2
 	echo
 	echo "   -c, --check		Check current time stamps for all users on the system"
+	echo "			(use --checkUsage to show disk usage for each user)" 
 	echo
 	echo "   -u, --user		Check status for specific user"
 	echo "				ex: $0 -u micauser"
@@ -333,7 +341,6 @@ display_help() {
 	echo
 	echo "   -s, --system		Displays environment variables and status"
 	echo
-	exit 1
 }
 
 
@@ -345,9 +352,15 @@ do
 			exit 0
 			;;
         -c | --check)
-                checkAccounts
-                break
-                ;;
+            checkAccounts
+            break
+            ;;
+        --checkUsage | --checkusage)
+        	usageCheck="Yes"
+            checkAccounts
+            break
+            ;;
+
 		-u | --user)
 			userToProcess="$2"
 			checkUser
